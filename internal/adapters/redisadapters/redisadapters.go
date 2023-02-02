@@ -137,7 +137,7 @@ func (r *RedisAdapter) RemoveRefreshToken(ctx context.Context, refreshTokenID st
 	).Err()
 }
 
-// RemoveFromIndexExpiringTokens removes an access token entry in the indexExpiringTokens sorted set from Redis
+// removeFromIndexExpiringTokens removes an access token entry in the indexExpiringTokens sorted set from Redis
 func (r *RedisAdapter) removeFromIndexExpiringTokens(ctx context.Context, accessToken models.AccessToken) error {
 
 	var z1 redis.Z
@@ -224,8 +224,8 @@ func (r *RedisAdapter) GetRefreshToken(ctx context.Context, tokenID string) (mod
 	}, err
 }
 
-// GetFromIndexExpiringTokens reads the associated expiration and tokenID of an access token from Redis
-func (r *RedisAdapter) GetFromIndexExpiringTokens(ctx context.Context, startTime time.Time, stopTime time.Time) ([]string, error) {
+// GetExpiringAccessTokenIDs reads the associated expiration and tokenID of an access token from Redis
+func (r *RedisAdapter) GetExpiringAccessTokenIDs(ctx context.Context, startTime time.Time, stopTime time.Time) ([]string, error) {
 	var expiringTokens []string
 
 	zrangeargs := redis.ZRangeArgs{

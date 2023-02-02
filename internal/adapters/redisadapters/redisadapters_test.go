@@ -3,7 +3,6 @@ package redisadapters
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -97,7 +96,14 @@ func TestSetAccessToken(t *testing.T) {
 		Type:      "git",
 	}
 
-	mock.ExpectHSet("accessTokens-12345", "accessToken", "6789", "expiresAt", expirationTime.Unix(), "URL", "https://gitlab.com", "type", "git")
+	z1 := redis.Z{
+		Score:  float64(myAccessToken.ExpiresAt.Unix()),
+		Member: myAccessToken.ID,
+	}
+
+	mock.ExpectZAdd("indexExpiringTokens", z1)
+
+	//mock.ExpectHSet("accessTokens-12345", "accessToken", "6789", "expiresAt", expirationTime.Unix(), "URL", "https://gitlab.com", "type", "git")
 
 	adapter1.SetAccessToken(ctx, myAccessToken)
 
@@ -143,7 +149,14 @@ func TestRemoveAccessToken(t *testing.T) {
 		Type:      "git",
 	}
 
-	mock.ExpectDel("accessTokens-12345")
+	z1 := redis.Z{
+		Score:  float64(myAccessToken.ExpiresAt.Unix()),
+		Member: myAccessToken.ID,
+	}
+
+	mock.ExpectZRem("indexExpiringTokens", z1)
+
+	//mock.ExpectDel("accessTokens-12345")
 
 	adapter1.RemoveAccessToken(ctx, myAccessToken)
 
@@ -214,7 +227,7 @@ func TestRemoveRefreshToken(t *testing.T) {
 	}
 }
 
-func TestGetFromIndexExpiringTokens(t *testing.T) {
+func TestGetExpiringAccessTokenIDs(t *testing.T) {
 	ctx := context.Background()
 
 	client, mock := redismock.NewClientMock()
@@ -234,11 +247,9 @@ func TestGetFromIndexExpiringTokens(t *testing.T) {
 		ByScore: true,
 	}
 
-	fmt.Printf("%v\n", zRangeArgs)
-
 	mock.ExpectZRangeArgsWithScores(zRangeArgs)
 
-	adapter1.GetFromIndexExpiringTokens(ctx, startTime, stopTime)
+	adapter1.GetExpiringAccessTokenIDs(ctx, startTime, stopTime)
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
