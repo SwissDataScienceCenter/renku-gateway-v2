@@ -17,10 +17,10 @@ type RedisAdapter struct {
 	Rdb redis.Client
 }
 
-// Write functions
+// Set/write functions
 
-// WriteSession writes the associated ID, type, expiration and tokenID of a session to Redis
-func (r *RedisAdapter) WriteSession(ctx context.Context, session models.Session) error {
+// SetSession writes the associated ID, type, expiration and tokenID of a session to Redis
+func (r *RedisAdapter) SetSession(ctx context.Context, session models.Session) error {
 
 	accessTokenList, err := json.Marshal(session.TokenIDs)
 	if err != nil {
@@ -39,8 +39,13 @@ func (r *RedisAdapter) WriteSession(ctx context.Context, session models.Session)
 	).Err()
 }
 
-// WriteAccessToken writes the associated ID, access token value, expiration, tokenID and refresh URL of an access token to Redis
-func (r *RedisAdapter) WriteAccessToken(ctx context.Context, accessToken models.AccessToken) error {
+// SetAccessToken writes the associated ID, access token value, expiration, tokenID and refresh URL of an access token to Redis
+func (r *RedisAdapter) SetAccessToken(ctx context.Context, accessToken models.AccessToken) error {
+
+	err := r.setToIndexExpiringTokens(ctx, accessToken)
+	if err != nil {
+		return err
+	}
 
 	return r.Rdb.HSet(
 		ctx,
@@ -56,8 +61,8 @@ func (r *RedisAdapter) WriteAccessToken(ctx context.Context, accessToken models.
 	).Err()
 }
 
-// WriteRefreshToken writes the associated ID, access token value, expiration and tokenID of a refresh token to Redis
-func (r *RedisAdapter) WriteRefreshToken(ctx context.Context, refreshToken models.RefreshToken) error {
+// SetRefreshToken writes the associated ID, access token value, expiration and tokenID of a refresh token to Redis
+func (r *RedisAdapter) SetRefreshToken(ctx context.Context, refreshToken models.RefreshToken) error {
 
 	return r.Rdb.HSet(
 		ctx,
@@ -69,8 +74,8 @@ func (r *RedisAdapter) WriteRefreshToken(ctx context.Context, refreshToken model
 	).Err()
 }
 
-// WriteToIndexExpiringTokens writes the associated expiration and tokenID of an access token to Redis
-func (r *RedisAdapter) WriteToIndexExpiringTokens(ctx context.Context, accessToken models.AccessToken) error {
+// SetToIndexExpiringTokens writes the associated expiration and tokenID of an access token to Redis
+func (r *RedisAdapter) setToIndexExpiringTokens(ctx context.Context, accessToken models.AccessToken) error {
 
 	var z1 redis.Z
 	z1.Score = float64(accessToken.ExpiresAt.Unix())
@@ -83,8 +88,8 @@ func (r *RedisAdapter) WriteToIndexExpiringTokens(ctx context.Context, accessTok
 	).Err()
 }
 
-// WriteProjectToken writes the project ID and associated expiration and tokenID of a project to Redis
-func (r *RedisAdapter) WriteProjectToken(ctx context.Context, projectID int, accessToken models.AccessToken) error {
+// SetProjectToken writes the project ID and associated expiration and tokenID of a project to Redis
+func (r *RedisAdapter) SetProjectToken(ctx context.Context, projectID int, accessToken models.AccessToken) error {
 
 	z1 := redis.Z{
 		Score:  float64(accessToken.ExpiresAt.Unix()),
@@ -110,11 +115,16 @@ func (r *RedisAdapter) RemoveSession(ctx context.Context, sessionID string) erro
 }
 
 // RemoveAccessToken removes an access token entry from Redis
-func (r *RedisAdapter) RemoveAccessToken(ctx context.Context, accessTokenID string) error {
+func (r *RedisAdapter) RemoveAccessToken(ctx context.Context, accessToken models.AccessToken) error {
+
+	err := r.removeFromIndexExpiringTokens(ctx, accessToken)
+	if err != nil {
+		return err
+	}
 
 	return r.Rdb.Del(
 		ctx,
-		"accessTokens-"+accessTokenID,
+		"accessTokens-"+accessToken.ID,
 	).Err()
 }
 
@@ -128,7 +138,7 @@ func (r *RedisAdapter) RemoveRefreshToken(ctx context.Context, refreshTokenID st
 }
 
 // RemoveFromIndexExpiringTokens removes an access token entry in the indexExpiringTokens sorted set from Redis
-func (r *RedisAdapter) RemoveFromIndexExpiringTokens(ctx context.Context, accessToken models.AccessToken) error {
+func (r *RedisAdapter) removeFromIndexExpiringTokens(ctx context.Context, accessToken models.AccessToken) error {
 
 	var z1 redis.Z
 	z1.Score = float64(accessToken.ExpiresAt.Unix())
@@ -215,17 +225,13 @@ func (r *RedisAdapter) GetRefreshToken(ctx context.Context, tokenID string) (mod
 }
 
 // GetFromIndexExpiringTokens reads the associated expiration and tokenID of an access token from Redis
-func (r *RedisAdapter) GetFromIndexExpiringTokens(
-	ctx context.Context,
-	startTime int64,
-	stopTime int64,
-) ([]string, error) {
+func (r *RedisAdapter) GetFromIndexExpiringTokens(ctx context.Context, startTime time.Time, stopTime time.Time) ([]string, error) {
 	var expiringTokens []string
 
 	zrangeargs := redis.ZRangeArgs{
 		Key:     "indexExpiringTokens",
-		Start:   startTime,
-		Stop:    stopTime,
+		Start:   startTime.Unix(),
+		Stop:    stopTime.Unix(),
 		ByScore: true,
 	}
 

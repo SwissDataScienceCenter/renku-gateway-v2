@@ -13,7 +13,7 @@ import (
 	"github.com/go-redis/redismock/v9"
 )
 
-func TestWriteSession(t *testing.T) {
+func TestSetSession(t *testing.T) {
 	ctx := context.Background()
 
 	client, mock := redismock.NewClientMock()
@@ -35,7 +35,7 @@ func TestWriteSession(t *testing.T) {
 
 	mock.ExpectHSet("session-12345", "type", "user", "expiresAt", expirationTime.Unix(), "tokenIds", jsonTestTokenIDs)
 
-	adapter1.WriteSession(ctx, mySession)
+	adapter1.SetSession(ctx, mySession)
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
@@ -78,7 +78,7 @@ func TestRemoveSession(t *testing.T) {
 	}
 }
 
-func TestWriteAccessToken(t *testing.T) {
+func TestSetAccessToken(t *testing.T) {
 	ctx := context.Background()
 
 	client, mock := redismock.NewClientMock()
@@ -109,7 +109,7 @@ func TestWriteAccessToken(t *testing.T) {
 		"git",
 	)
 
-	adapter1.WriteAccessToken(ctx, myAccessToken)
+	adapter1.SetAccessToken(ctx, myAccessToken)
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
@@ -143,16 +143,26 @@ func TestRemoveAccessToken(t *testing.T) {
 		Rdb: *client,
 	}
 
+	expirationTime := time.Unix(time.Now().Unix()+rand.Int63n(14400), 0)
+
+	myAccessToken := models.AccessToken{
+		ID:        "12345",
+		Value:     "6789",
+		ExpiresAt: expirationTime,
+		URL:       "https://gitlab.com",
+		Type:      "git",
+	}
+
 	mock.ExpectDel("accessTokens-12345")
 
-	adapter1.RemoveAccessToken(ctx, "12345")
+	adapter1.RemoveAccessToken(ctx, myAccessToken)
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestWriteRefreshToken(t *testing.T) {
+func TestSetRefreshToken(t *testing.T) {
 	ctx := context.Background()
 
 	client, mock := redismock.NewClientMock()
@@ -171,7 +181,7 @@ func TestWriteRefreshToken(t *testing.T) {
 
 	mock.ExpectHSet("refreshTokens-12345", "refreshToken", "6789", "expiresAt", expirationTime.Unix())
 
-	adapter1.WriteRefreshToken(ctx, myRefreshToken)
+	adapter1.SetRefreshToken(ctx, myRefreshToken)
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
@@ -214,39 +224,6 @@ func TestRemoveRefreshToken(t *testing.T) {
 	}
 }
 
-func TestWriteToIndexExpiringTokens(t *testing.T) {
-	ctx := context.Background()
-
-	client, mock := redismock.NewClientMock()
-
-	adapter1 := RedisAdapter{
-		Rdb: *client,
-	}
-
-	expirationTime := time.Unix(time.Now().Unix()+rand.Int63n(14400), 0)
-
-	myAccessToken := models.AccessToken{
-		ID:        "12345",
-		Value:     "6789",
-		ExpiresAt: expirationTime,
-		URL:       "https://gitlab.com",
-		Type:      "git",
-	}
-
-	z1 := redis.Z{
-		Score:  float64(myAccessToken.ExpiresAt.Unix()),
-		Member: myAccessToken.ID,
-	}
-
-	mock.ExpectZAdd("indexExpiringTokens", z1)
-
-	adapter1.WriteToIndexExpiringTokens(ctx, myAccessToken)
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestGetFromIndexExpiringTokens(t *testing.T) {
 	ctx := context.Background()
 
@@ -256,14 +233,14 @@ func TestGetFromIndexExpiringTokens(t *testing.T) {
 		Rdb: *client,
 	}
 
-	startTime := time.Now().Unix()
+	startTime := time.Now()
 
-	stopTime := time.Now().Unix() + rand.Int63n(14400)
+	stopTime := time.Now().Add(time.Hour * 4)
 
 	zRangeArgs := redis.ZRangeArgs{
 		Key:     "indexExpiringTokens",
-		Start:   startTime,
-		Stop:    stopTime,
+		Start:   startTime.Unix(),
+		Stop:    stopTime.Unix(),
 		ByScore: true,
 	}
 
@@ -278,40 +255,7 @@ func TestGetFromIndexExpiringTokens(t *testing.T) {
 	}
 }
 
-func TestRemoveFromIndexExpiringTokens(t *testing.T) {
-	ctx := context.Background()
-
-	client, mock := redismock.NewClientMock()
-
-	adapter1 := RedisAdapter{
-		Rdb: *client,
-	}
-
-	expirationTime := time.Unix(time.Now().Unix()+rand.Int63n(14400), 0)
-
-	myAccessToken := models.AccessToken{
-		ID:        "12345",
-		Value:     "6789",
-		ExpiresAt: expirationTime,
-		URL:       "https://gitlab.com",
-		Type:      "git",
-	}
-
-	z1 := redis.Z{
-		Score:  float64(myAccessToken.ExpiresAt.Unix()),
-		Member: myAccessToken.ID,
-	}
-
-	mock.ExpectZRem("indexExpiringTokens", z1)
-
-	adapter1.RemoveFromIndexExpiringTokens(ctx, myAccessToken)
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestWriteProjectToken(t *testing.T) {
+func TestSetProjectToken(t *testing.T) {
 	ctx := context.Background()
 
 	client, mock := redismock.NewClientMock()
@@ -337,7 +281,7 @@ func TestWriteProjectToken(t *testing.T) {
 
 	mock.ExpectZAdd("projectTokens-4567", z1)
 
-	adapter1.WriteProjectToken(ctx, 4567, myAccessToken)
+	adapter1.SetProjectToken(ctx, 4567, myAccessToken)
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
