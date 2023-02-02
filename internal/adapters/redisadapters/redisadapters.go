@@ -215,7 +215,11 @@ func (r *RedisAdapter) GetRefreshToken(ctx context.Context, tokenID string) (mod
 }
 
 // GetFromIndexExpiringTokens reads the associated expiration and tokenID of an access token from Redis
-func (r *RedisAdapter) GetFromIndexExpiringTokens(ctx context.Context, startTime int64, stopTime int64) ([]string, error) {
+func (r *RedisAdapter) GetFromIndexExpiringTokens(
+	ctx context.Context,
+	startTime int64,
+	stopTime int64,
+) ([]string, error) {
 	var expiringTokens []string
 
 	zrangeargs := redis.ZRangeArgs{

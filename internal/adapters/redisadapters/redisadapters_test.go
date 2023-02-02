@@ -97,7 +97,17 @@ func TestWriteAccessToken(t *testing.T) {
 		Type:      "git",
 	}
 
-	mock.ExpectHSet("accessTokens-12345", "accessToken", "6789", "expiresAt", expirationTime.Unix(), "URL", "https://gitlab.com", "type", "git")
+	mock.ExpectHSet(
+		"accessTokens-12345",
+		"accessToken",
+		"6789",
+		"expiresAt",
+		expirationTime.Unix(),
+		"URL",
+		"https://gitlab.com",
+		"type",
+		"git",
+	)
 
 	adapter1.WriteAccessToken(ctx, myAccessToken)
 
