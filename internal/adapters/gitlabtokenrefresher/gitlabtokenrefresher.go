@@ -23,10 +23,10 @@ type tokenResponse struct {
 	CreatedAt    int64  `json:"created_at"`
 }
 
-func ScheduleRefreshExpiringTokens(ctx context.Context, redisAdapter redisadapters.RedisAdapter, minsToExpiration int) error {
+func ScheduleRefreshExpiringTokens(ctx context.Context, redisAdapter redisadapters.RedisAdapter, gitlabTokenRefreshURL string, clientID string, clientSecret string, minsToExpiration int) error {
 	// schedule token refresh evaluations
 	s := gocron.NewScheduler(time.UTC)
-	job, err := s.Every(minsToExpiration).Minutes().Do(refreshExpiringTokens, ctx, redisAdapter, minsToExpiration)
+	job, err := s.Every(minsToExpiration).Minutes().Do(refreshExpiringTokens, ctx, redisAdapter, gitlabTokenRefreshURL, clientID, clientSecret, minsToExpiration)
 	s.StartBlocking()
 	if err != nil {
 		log.Printf("Reading body failed: %s", err)
@@ -36,8 +36,7 @@ func ScheduleRefreshExpiringTokens(ctx context.Context, redisAdapter redisadapte
 	return err
 }
 
-func refreshExpiringTokens(ctx context.Context, redisAdapter redisadapters.RedisAdapter, minsToExpiration int) error {
-
+func refreshExpiringTokens(ctx context.Context, redisAdapter redisadapters.RedisAdapter, gitlabTokenRefreshURL string, clientID string, clientSecret string, minsToExpiration int) error {
 	expiringTokenIDs, err := redisAdapter.GetExpiringAccessTokenIDs(ctx, time.Now(), time.Now().Add(time.Minute*time.Duration(minsToExpiration)))
 	if err != nil {
 		log.Printf("Reading body failed: %s", err)
@@ -45,11 +44,6 @@ func refreshExpiringTokens(ctx context.Context, redisAdapter redisadapters.Redis
 	}
 
 	for _, expiringTokenID := range expiringTokenIDs {
-
-		gitlabTokenRefreshURL := "https://gitlab.dev.renku.ch/oauth/token"
-		clientID := ""
-		clientSecret := ""
-
 		myRefreshToken, err := redisAdapter.GetRefreshToken(ctx, expiringTokenID)
 		if err != nil {
 			log.Printf("Reading body failed: %s", err)
