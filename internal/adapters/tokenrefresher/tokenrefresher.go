@@ -29,6 +29,7 @@ func (t tokenResponse) String() string {
 	return fmt.Sprintf("CreatedAt: %v, Type: %v, ExpiresIn: %v, RefreshTokenExpiresIn: %v", t.CreatedAt, t.Type, t.ExpiresIn, t.RefreshTokenExpiresIn)
 }
 
+// RefresherTokenStore is an interface used for refreshing tokens stored by the gateway
 type RefresherTokenStore interface {
 	GetRefreshToken(context.Context, string) (models.RefreshToken, error)
 	GetAccessToken(context.Context, string) (models.AccessToken, error)
@@ -96,9 +97,9 @@ func refreshExpiringTokens(ctx context.Context, tokenStore RefresherTokenStore, 
 		if err != nil {
 			log.Printf("Decoding body failed: %s\n", err)
 			return err
-		} else {
-			log.Printf("New token received: %v\n", token)
 		}
+
+		log.Printf("New token received: %v\n", token)
 
 		// Calculate the UNIX timestamp at which the newly refreshed access and refresh tokens will expire
 		accessTokenExpiration := time.Unix(token.CreatedAt+token.ExpiresIn, 0)
