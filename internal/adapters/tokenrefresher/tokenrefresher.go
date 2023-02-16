@@ -3,7 +3,7 @@ package tokenrefresher
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -24,6 +24,10 @@ type tokenResponse struct {
 	CreatedAt             int64  `json:"created_at"`
 }
 
+func (t tokenResponse) String() string {
+	return fmt.Sprintf("CreatedAt: %v, Type: %v, ExpiresIn: %v, RefreshTokenExpiresIn: %v", t.CreatedAt, t.Type, t.ExpiresIn, t.RefreshTokenExpiresIn)
+}
+
 type RefresherTokenStore interface {
 	GetRefreshToken(context.Context, string) (models.RefreshToken, error)
 	GetAccessToken(context.Context, string) (models.AccessToken, error)
@@ -38,7 +42,7 @@ func ScheduleRefreshExpiringTokens(ctx context.Context, tokenStore RefresherToke
 	job, err := s.Every(minsToExpiration).Minutes().Do(refreshExpiringTokens, ctx, tokenStore, gitlabClientID, gitlabClientSecret, minsToExpiration)
 	s.StartBlocking()
 	if err != nil {
-		log.Printf("Reading body failed: %s\n", err)
+		log.Printf("Starting gocron job failed: %s\n", err)
 	} else {
 		log.Printf("Job starting: %v\n", job)
 	}
@@ -84,16 +88,15 @@ func refreshExpiringTokens(ctx context.Context, tokenStore RefresherTokenStore, 
 			return err
 		}
 		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
 
-		// Unmarshal result returned from the POST refresh request into a tokenResponse
+		// Decode JSON returned from the POST refresh request into a tokenResponse
 		token := tokenResponse{}
-		err = json.Unmarshal(body, &token)
+		err = json.NewDecoder(resp.Body).Decode(&token)
 		if err != nil {
-			log.Printf("Reading body failed: %s\n", err)
+			log.Printf("Decoding body failed: %s\n", err)
 			return err
 		} else {
-			log.Printf("New token received\n")
+			log.Printf("New token received: %v\n", token)
 		}
 
 		// Calculate the UNIX timestamp at which the newly refreshed access and refresh tokens will expire
