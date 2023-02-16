@@ -50,7 +50,7 @@ func refreshExpiringTokens(ctx context.Context, tokenStore RefresherTokenStore, 
 	// Get a list of expiring access tokens ids in the next minsToExpiration minutes
 	expiringTokenIDs, err := tokenStore.GetExpiringAccessTokenIDs(ctx, time.Now(), time.Now().Add(time.Minute*time.Duration(minsToExpiration)))
 	if err != nil {
-		log.Printf("Reading body failed: %s\n", err)
+		log.Printf("GetExpiringAccessTokenIDs failed: %s\n", err)
 		return err
 	}
 
@@ -60,13 +60,13 @@ func refreshExpiringTokens(ctx context.Context, tokenStore RefresherTokenStore, 
 		// Get the refresh and access tokens associated with the token ID
 		myRefreshToken, err := tokenStore.GetRefreshToken(ctx, expiringTokenID)
 		if err != nil {
-			log.Printf("Reading body failed: %s\n", err)
+			log.Printf("GetRefreshToken failed: %s\n", err)
 			return err
 		}
 
 		myAccessToken, err := tokenStore.GetAccessToken(ctx, expiringTokenID)
 		if err != nil {
-			log.Printf("Reading body failed: %s\n", err)
+			log.Printf("GetAccessToken failed: %s\n", err)
 			return err
 		}
 
