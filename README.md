@@ -11,3 +11,7 @@ Useful commands:
 - To lint: `golangci-lint run -v`
 - To reformat long lines: `golines . -w --max-len=120 --base-formatter=gofmt` or
   to target a specific file replace `.` with the filename in the command
+
+## Important references
+
+[GitLab refresh tokens do not expire](https://gitlab.com/gitlab-org/gitlab/-/issues/340848#note_953496566)
