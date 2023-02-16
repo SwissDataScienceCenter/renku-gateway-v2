@@ -1,3 +1,4 @@
+// Package tokenrefresher refreshes oauth tokens stored by the gateway.
 package tokenrefresher
 
 import (
