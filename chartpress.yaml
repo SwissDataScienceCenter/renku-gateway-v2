@@ -1,0 +1,22 @@
+charts:
+  - name: helm-chart/renku-gateway
+    resetTag: latest
+    imagePrefix: renku/
+    repo:
+      git: SwissDataScienceCenter/helm-charts
+      published: https://swissdatasciencecenter.github.io/helm-charts
+    paths:
+      - .
+    images:
+      renku-login:
+        contextPath: .
+        dockerfilePath: Dockerfile
+        valuesPath: login.image
+        buildArgs:
+          EXECUTABLE: login
+      renku-revproxy:
+        contextPath: .
+        dockerfilePath: Dockerfile
+        valuesPath: reverseProxy.image
+        buildArgs:
+          EXECUTABLE: revproxy

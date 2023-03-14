@@ -1,0 +1,137 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "gateway.fullname" . }}-login
+  labels:
+    app: {{ template "gateway.name" . }}-login
+    chart: {{ template "gateway.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ template "gateway.name" . }}-login
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "gateway.name" . }}-login
+        release: {{ .Release.Name }}
+        # The label below enables the gateway to connect to redis
+        {{ .Values.global.redis.clientLabel | toYaml | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      automountServiceAccountToken: {{ .Values.global.debug }}
+      initContainers:
+        {{- include "certificates.initContainer" . | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.login.image.name }}:{{ .Values.login.image.tag}}"
+          imagePullPolicy: {{ .Values.login.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: LOGIN_SESSION_PERSISTENCE_TYPE
+              value: redis
+            - name: LOGIN_SESSION_TTL_HOURS
+              value: "8"
+            - name: LOGIN_DEFAULT_PROVIDER_IDS
+              value: "renku,gitlab"
+            - name: LOGIN_DEFAULT_APP_REDIRECT_URL
+              value: {{ .Values.hostName | default (printf "%s://%s" (include "gateway.protocol" .) .Values.global.renku.domain) | quote }}
+            - name: LOGIN_REDIS_ADDRESSES
+              value: {{ .Values.global.redis.sentinel.addresses | join "," | quote }}
+            - name: LOGIN_REDIS_IS_SENTINEL
+              value: {{ .Values.global.redis.sentinel.enabled | quote }}
+            - name: LOGIN_REDIS_MASTER_NAME
+              value: {{ .Values.global.redis.sentinel.masterSet | quote }}
+            - name: LOGIN_REDIS_DB_INDEX
+              value: {{ .Values.global.redis.dbIndex.gateway | quote }}
+            - name: LOGIN_REDIS_PORT
+              value: {{ .Values.global.redis.port | quote }}
+            - name: LOGIN_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.redis.existingSecret }}
+                  key: {{ .Values.global.redis.existingSecretPasswordKey }}
+            - name: LOGIN_TOKEN_ENCRYPTION_ENABLED
+              value: "true"
+            - name: LOGIN_TOKEN_ENCRYPTION_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "gateway.fullname" . }}
+                  key: gatewaySecret
+            - name: LOGIN_SERVER_PORT
+              value: "8080"
+            - name: LOGIN_SERVER_BASE_URL
+              value: /api/auth
+            - name: LOGIN_SESSION_COOKIE_NAME
+              value: _session
+            - name: LOGIN_CALLBACK_URL
+              value: {{ .Values.hostName | default (printf "%s://%s/api/auth/callback" (include "gateway.protocol" .) .Values.global.renku.domain) | quote }}
+            - name: LOGIN_PROVIDER_CONFIG_FILE
+              value: "/etc/login/config/{{ .Values.providersConfig.secretKey }}"
+            - name: LOGIN_ALLOW_ORIGIN
+              value: {{ .Values.allowOrigin | join "," | quote }}
+            - name: OLD_GITLAB_LOGOUT
+              value: {{ .Values.oldGitLabLogout | quote }}
+            - name: LOGOUT_GITLAB_UPON_RENKU_LOGOUT
+              value: {{ .Values.logoutGitLabUponRenkuLogout | quote }}
+            - name: LOGIN_CSRF_COOKIE_NAME_PREFIX
+              value: _login
+            - name: LOGIN_CSRF_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "gateway.fullname" . }}
+                  key: gatewaySecret
+            - name: LOGIN_CSRF_COOKIE_DOMAINS
+              value: {{ .Values.hostName | default .Values.global.renku.domain | quote }}
+            - name: LOGIN_CSRF_COOKIE_PATH
+              value: "/"
+            - name: LOGIN_CSRF_COOKIE_TTL_MINUTES
+              value: "5"
+          volumeMounts:
+            {{- include "certificates.volumeMounts.system" . | nindent 12 }}
+            - mountPath: /etc/login/config
+              name: providers-config
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /api/auth/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /api/auth/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 2
+            failureThreshold: 2
+          resources:
+            {{ toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{ toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        {{- include "certificates.volumes" . | nindent 8 }}
+        - secret:
+            defaultMode: 420
+            secretName: {{ .Values.providersConfig.secretName }}
+          name: providers-config
