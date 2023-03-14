@@ -11,7 +11,13 @@ Useful commands:
 - To lint: `golangci-lint run -v`
 - To reformat long lines: `golines . -w --max-len=120 --base-formatter=gofmt` or
   to target a specific file replace `.` with the filename in the command
+- To generate endpoint interfaces from the OpenApi spec: `oapi-codegen -generate types,server,spec -package main api/spec.yaml > cmd/login/spec.gen.go`
 
 ## Important references
 
 [GitLab refresh tokens do not expire](https://gitlab.com/gitlab-org/gitlab/-/issues/340848#note_953496566)
+
+## Code generation from API spec
+
+`oapi-codegen -generate types,server,spec -package login api/spec.yaml > cmd/login/spec.gen.go`
+
