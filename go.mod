@@ -3,6 +3,7 @@ module github.com/SwissDataScienceCenter/renku-gateway-v2
 go 1.19
 
 require (
+	github.com/elazarl/goproxy v0.0.0-20221015165544-a0805db90819
 	github.com/go-co-op/gocron v1.18.0
 	github.com/go-redis/redis/v9 v9.0.0-rc.2
 	github.com/go-redis/redismock/v9 v9.0.0-rc.2
