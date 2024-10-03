@@ -1,5 +1,7 @@
 # renku-gateway-v2
 
+THIS IS ARCHIVED. Any changes that are here that were useful were already commited and added to the regular repository which contains the new gateway already refactored with Go.
+
 ## Contributing
 
 1. Install [GO](https://go.dev/doc/install)
