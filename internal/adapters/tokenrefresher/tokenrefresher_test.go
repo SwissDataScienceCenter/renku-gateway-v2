@@ -16,23 +16,37 @@ var ctx = context.Background()
 
 type DummyAdapter struct {
 	err          error
-	accessToken  models.AccessToken
-	refreshToken models.RefreshToken
+	accessToken  models.OauthToken
+	refreshToken models.OauthToken
 	tokenID      string
 }
 
-func (d *DummyAdapter) GetRefreshToken(context.Context, string) (models.RefreshToken, error) {
+func (d *DummyAdapter) GetRefreshToken(context.Context, string) (models.OauthToken, error) {
 	return d.refreshToken, d.err
 }
-func (d *DummyAdapter) GetAccessToken(context.Context, string) (models.AccessToken, error) {
+func (d *DummyAdapter) GetAccessToken(context.Context, string) (models.OauthToken, error) {
 	return d.accessToken, d.err
 }
-func (d *DummyAdapter) SetRefreshToken(ctx context.Context, aRefreshToken models.RefreshToken) error {
+func (d *DummyAdapter) GetAccessTokens(context.Context, ...string) (map[string]models.OauthToken, error) {
+	return map[string]models.OauthToken{d.accessToken.ProviderID: d.accessToken}, d.err
+}
+func (d *DummyAdapter) GetRefreshTokens(context.Context, ...string) (map[string]models.OauthToken, error) {
+	return map[string]models.OauthToken{d.refreshToken.ProviderID: d.refreshToken}, d.err
+}
+func (d *DummyAdapter) SetRefreshToken(_ context.Context, aRefreshToken models.OauthToken) error {
 	d.refreshToken = aRefreshToken
 	return d.err
 }
-func (d *DummyAdapter) SetAccessToken(ctx context.Context, anAccessToken models.AccessToken) error {
+func (d *DummyAdapter) SetAccessToken(_ context.Context, anAccessToken models.OauthToken) error {
 	d.accessToken = anAccessToken
+	return d.err
+}
+func (d *DummyAdapter) RemoveAccessToken(_ context.Context, _ models.OauthToken) error {
+	d.accessToken = models.OauthToken{}
+	return d.err
+}
+func (d *DummyAdapter) RemoveRefreshToken(_ context.Context, _ string) error {
+	d.refreshToken = models.OauthToken{}
 	return d.err
 }
 func (d *DummyAdapter) GetExpiringAccessTokenIDs(context.Context, time.Time, time.Time) ([]string, error) {
@@ -40,7 +54,6 @@ func (d *DummyAdapter) GetExpiringAccessTokenIDs(context.Context, time.Time, tim
 }
 
 func TestRefreshExpiringTokensGitlab(t *testing.T) {
-
 	log.Printf("Testing GitLab access token refresh")
 
 	// Set dummy values for the 'existing' access and refresh tokens, and the oauth client id and secret
@@ -49,7 +62,6 @@ func TestRefreshExpiringTokensGitlab(t *testing.T) {
 	accessTokenValue := "C1SB4BC3HTP841TGVS4R4G5JEAVQT4W"
 	clientID := "iPG5UPqrV6LiXiziLbj0CBGbDvWdPWwG"
 	clientSecret := "9p9KBXSUj037qkR55mdS0yAAecBxbb8Q"
-	tokenType := "git"
 
 	// Set the dummy values we want the access and refresh tokens to have after refreshing them.
 	refreshedAccessTokenValue := "6XGQJCST3BY1BZ7X5X78X2MLF0W1AUB5"
@@ -70,25 +82,39 @@ func TestRefreshExpiringTokensGitlab(t *testing.T) {
 			if refreshTokenValue == r.PostForm["refresh_token"][0] {
 				log.Printf("The refresh token posted is the correct value, %v\n", r.PostForm["refresh_token"][0])
 			} else {
-				t.Errorf("The refresh token posted is NOT the correct value, got %v want %v\n", r.PostForm["refresh_token"][0], refreshTokenValue)
+				t.Errorf(
+					"The refresh token posted is NOT the correct value, got %v want %v\n",
+					r.PostForm["refresh_token"][0],
+					refreshTokenValue,
+				)
 			}
 
 			if clientID == r.PostForm["client_id"][0] {
 				log.Printf("The client ID posted is the correct value, %v\n", r.PostForm["client_id"][0])
 			} else {
-				t.Errorf("The client ID posted is NOT the correct value, got %v want %v\n", r.PostForm["client_id"][0], refreshTokenValue)
+				t.Errorf(
+					"The client ID posted is NOT the correct value, got %v want %v\n",
+					r.PostForm["client_id"][0],
+					refreshTokenValue,
+				)
 			}
 
 			if clientSecret == r.PostForm["client_secret"][0] {
 				log.Printf("The client secret posted is the correct value, %v\n", r.PostForm["client_secret"][0])
 			} else {
-				t.Errorf("The client secret posted is NOT the correct value, got %v want %v\n", r.PostForm["client_secret"][0], refreshTokenValue)
+				t.Errorf(
+					"The client secret posted is NOT the correct value, got %v want %v\n",
+					r.PostForm["client_secret"][0],
+					refreshTokenValue,
+				)
 			}
 
 			if "refresh_token" == r.PostForm["grant_type"][0] {
 				log.Printf("The grant_type posted is the correct value, %v\n", r.PostForm["grant_type"][0])
 			} else {
-				t.Errorf("The grant_type posted is NOT the correct value, got %v want %v\n", r.PostForm["grant_type"][0], "refresh_token")
+				t.Errorf(
+					"The grant_type posted is NOT the correct value, got %v want %v\n", r.PostForm["grant_type"][0], "refresh_token",
+				)
 			}
 
 			// Return the refreshed token values, and the other values Gitlab returns from the test HTTP server
@@ -115,18 +141,17 @@ func TestRefreshExpiringTokensGitlab(t *testing.T) {
 	var myRefresherTokenStore RefresherTokenStore = &DummyAdapter{}
 
 	// Create a refresh and access token in our dummy token store with the pre-refresh token values
-	err := myRefresherTokenStore.SetAccessToken(ctx, models.AccessToken{
+	err := myRefresherTokenStore.SetAccessToken(ctx, models.OauthToken{
 		ID:        tokenID,
 		Value:     accessTokenValue,
 		ExpiresAt: time.Now().Add(time.Minute * 5),
-		URL:       srv.URL,
-		Type:      tokenType,
+		TokenURL:  srv.URL,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = myRefresherTokenStore.SetRefreshToken(ctx, models.RefreshToken{
+	err = myRefresherTokenStore.SetRefreshToken(ctx, models.OauthToken{
 		ID:    tokenID,
 		Value: refreshTokenValue,
 	})
@@ -154,36 +179,45 @@ func TestRefreshExpiringTokensGitlab(t *testing.T) {
 	if refreshedAccessTokenValue == myNewAccessToken.Value {
 		log.Printf("The new access token is the correct value, %v\n", myNewAccessToken.Value)
 	} else {
-		t.Errorf("The new access token received is NOT the correct value, got %v want %v\n", myNewAccessToken.Value, refreshedAccessTokenValue)
+		t.Errorf(
+			"The new access token received is NOT the correct value, got %v want %v\n",
+			myNewAccessToken.Value,
+			refreshedAccessTokenValue,
+		)
 	}
 
-	if srv.URL == myNewAccessToken.URL {
-		log.Printf("The new access token URL is the correct value, %v\n", myNewAccessToken.URL)
+	if srv.URL == myNewAccessToken.TokenURL {
+		log.Printf("The new access token URL is the correct value, %v\n", myNewAccessToken.TokenURL)
 	} else {
-		t.Errorf("The new access token URL received is NOT the correct value, got %v want %v\n", myNewAccessToken.URL, srv.URL)
-	}
-
-	if tokenType == myNewAccessToken.Type {
-		log.Printf("The new access token type is the correct value, %v\n", myNewAccessToken.Type)
-	} else {
-		t.Errorf("The new access token URL received is NOT the correct value, got %v want %v\n", myNewAccessToken.Type, tokenType)
+		t.Errorf(
+			"The new access token URL received is NOT the correct value, got %v want %v\n",
+			myNewAccessToken.TokenURL,
+			srv.URL,
+		)
 	}
 
 	if refreshedTokenCreationTime+7200 == myNewAccessToken.ExpiresAt.Unix() {
 		log.Printf("The new access token expiration time is the correct value, %v\n", myNewAccessToken.ExpiresAt.Unix())
 	} else {
-		t.Errorf("The new access token expiration time received is NOT the correct value, got %v want %v\n", myNewAccessToken.ExpiresAt.Unix(), refreshedTokenCreationTime+7200)
+		t.Errorf(
+			"The new access token expiration time received is NOT the correct value, got %v want %v\n",
+			myNewAccessToken.ExpiresAt.Unix(),
+			refreshedTokenCreationTime+7200,
+		)
 	}
 
 	if refreshedRefreshTokenValue == myNewRefreshToken.Value {
 		log.Printf("The new refresh token is the correct value, %v\n", myNewRefreshToken.Value)
 	} else {
-		t.Errorf("The new refresh token received is NOT the correct value, got %v want %v\n", myNewRefreshToken.Value, refreshedRefreshTokenValue)
+		t.Errorf(
+			"The new refresh token received is NOT the correct value, got %v want %v\n",
+			myNewRefreshToken.Value,
+			refreshedRefreshTokenValue,
+		)
 	}
 }
 
 func TestRefreshExpiringTokensKeycloak(t *testing.T) {
-
 	log.Printf("Testing Keycloak access token refresh")
 
 	// Set dummy values for the 'existing' access and refresh tokens, and the oauth client id and secret
@@ -192,7 +226,6 @@ func TestRefreshExpiringTokensKeycloak(t *testing.T) {
 	accessTokenValue := "C1SB4BC3HTP841TGVS4R4G5JEAVQT4W"
 	clientID := "iPG5UPqrV6LiXiziLbj0CBGbDvWdPWwG"
 	clientSecret := "9p9KBXSUj037qkR55mdS0yAAecBxbb8Q"
-	tokenType := "keycloak"
 
 	// Set the dummy values we want the access and refresh tokens to have after refreshing them.
 	refreshedAccessTokenValue := "6XGQJCST3BY1BZ7X5X78X2MLF0W1AUB5"
@@ -213,25 +246,41 @@ func TestRefreshExpiringTokensKeycloak(t *testing.T) {
 			if refreshTokenValue == r.PostForm["refresh_token"][0] {
 				log.Printf("The refresh token posted is the correct value, %v\n", r.PostForm["refresh_token"][0])
 			} else {
-				t.Errorf("The refresh token posted is NOT the correct value, got %v want %v\n", r.PostForm["refresh_token"][0], refreshTokenValue)
+				t.Errorf(
+					"The refresh token posted is NOT the correct value, got %v want %v\n",
+					r.PostForm["refresh_token"][0],
+					refreshTokenValue,
+				)
 			}
 
 			if clientID == r.PostForm["client_id"][0] {
 				log.Printf("The client ID posted is the correct value, %v\n", r.PostForm["client_id"][0])
 			} else {
-				t.Errorf("The client ID posted is NOT the correct value, got %v want %v\n", r.PostForm["client_id"][0], refreshTokenValue)
+				t.Errorf(
+					"The client ID posted is NOT the correct value, got %v want %v\n",
+					r.PostForm["client_id"][0],
+					refreshTokenValue,
+				)
 			}
 
 			if clientSecret == r.PostForm["client_secret"][0] {
 				log.Printf("The client secret posted is the correct value, %v\n", r.PostForm["client_secret"][0])
 			} else {
-				t.Errorf("The client secret posted is NOT the correct value, got %v want %v\n", r.PostForm["client_secret"][0], refreshTokenValue)
+				t.Errorf(
+					"The client secret posted is NOT the correct value, got %v want %v\n",
+					r.PostForm["client_secret"][0],
+					refreshTokenValue,
+				)
 			}
 
 			if "refresh_token" == r.PostForm["grant_type"][0] {
 				log.Printf("The grant_type posted is the correct value, %v\n", r.PostForm["grant_type"][0])
 			} else {
-				t.Errorf("The grant_type posted is NOT the correct value, got %v want %v\n", r.PostForm["grant_type"][0], "refresh_token")
+				t.Errorf(
+					"The grant_type posted is NOT the correct value, got %v want %v\n",
+					r.PostForm["grant_type"][0],
+					"refresh_token",
+				)
 			}
 
 			// Return the refreshed token values, and the other values Keycloak returns from the test HTTP server
@@ -258,18 +307,17 @@ func TestRefreshExpiringTokensKeycloak(t *testing.T) {
 	var myRefresherTokenStore RefresherTokenStore = &DummyAdapter{}
 
 	// Create a refresh and access token in our dummy token store with the pre-refresh token values
-	err := myRefresherTokenStore.SetAccessToken(ctx, models.AccessToken{
+	err := myRefresherTokenStore.SetAccessToken(ctx, models.OauthToken{
 		ID:        tokenID,
 		Value:     accessTokenValue,
 		ExpiresAt: time.Now().Add(time.Minute * 5),
-		URL:       srv.URL,
-		Type:      tokenType,
+		TokenURL:  srv.URL,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = myRefresherTokenStore.SetRefreshToken(ctx, models.RefreshToken{
+	err = myRefresherTokenStore.SetRefreshToken(ctx, models.OauthToken{
 		ID:    tokenID,
 		Value: refreshTokenValue,
 	})
@@ -297,36 +345,53 @@ func TestRefreshExpiringTokensKeycloak(t *testing.T) {
 	if refreshedAccessTokenValue == myNewAccessToken.Value {
 		log.Printf("The new access token is the correct value, %v\n", myNewAccessToken.Value)
 	} else {
-		t.Errorf("The new access token received is NOT the correct value, got %v want %v\n", myNewAccessToken.Value, refreshedAccessTokenValue)
+		t.Errorf(
+			"The new access token received is NOT the correct value, got %v want %v\n",
+			myNewAccessToken.Value,
+			refreshedAccessTokenValue,
+		)
 	}
 
-	if srv.URL == myNewAccessToken.URL {
-		log.Printf("The new access token URL is the correct value, %v\n", myNewAccessToken.URL)
+	if srv.URL == myNewAccessToken.TokenURL {
+		log.Printf("The new access token URL is the correct value, %v\n", myNewAccessToken.TokenURL)
 	} else {
-		t.Errorf("The new access token URL received is NOT the correct value, got %v want %v\n", myNewAccessToken.URL, srv.URL)
-	}
-
-	if tokenType == myNewAccessToken.Type {
-		log.Printf("The new access token type is the correct value, %v\n", myNewAccessToken.Type)
-	} else {
-		t.Errorf("The new access token URL received is NOT the correct value, got %v want %v\n", myNewAccessToken.Type, tokenType)
+		t.Errorf(
+			"The new access token URL received is NOT the correct value, got %v want %v\n",
+			myNewAccessToken.TokenURL,
+			srv.URL,
+		)
 	}
 
 	if refreshedTokenCreationTime+1800 == myNewAccessToken.ExpiresAt.Unix() {
 		log.Printf("The new access token expiration time is the correct value, %v\n", myNewAccessToken.ExpiresAt.Unix())
 	} else {
-		t.Errorf("The new access token expiration time received is NOT the correct value, got %v want %v\n", myNewAccessToken.ExpiresAt.Unix(), refreshedTokenCreationTime+7200)
+		t.Errorf(
+			"The new access token expiration time received is NOT the correct value, got %v want %v\n",
+			myNewAccessToken.ExpiresAt.Unix(),
+			refreshedTokenCreationTime+7200,
+		)
 	}
 
 	if refreshedRefreshTokenValue == myNewRefreshToken.Value {
 		log.Printf("The new refresh token is the correct value, %v\n", myNewRefreshToken.Value)
 	} else {
-		t.Errorf("The new refresh token received is NOT the correct value, got %v want %v\n", myNewRefreshToken.Value, refreshedRefreshTokenValue)
+		t.Errorf(
+			"The new refresh token received is NOT the correct value, got %v want %v\n",
+			myNewRefreshToken.Value,
+			refreshedRefreshTokenValue,
+		)
 	}
 
 	if refreshedTokenCreationTime+86400 == myNewRefreshToken.ExpiresAt.Unix() {
-		log.Printf("The new refresh token expiration time is the correct value, %v\n", myNewRefreshToken.ExpiresAt.Unix())
+		log.Printf(
+			"The new refresh token expiration time is the correct value, %v\n",
+			myNewRefreshToken.ExpiresAt.Unix(),
+		)
 	} else {
-		t.Errorf("The new refresh token received is NOT the correct value, got %v want %v\n", myNewRefreshToken.ExpiresAt.Unix(), refreshedTokenCreationTime+86400)
+		t.Errorf(
+			"The new refresh token received is NOT the correct value, got %v want %v\n",
+			myNewRefreshToken.ExpiresAt.Unix(),
+			refreshedTokenCreationTime+86400,
+		)
 	}
 }
